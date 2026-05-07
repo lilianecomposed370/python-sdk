@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+import pytest
+
+from assinafy.errors import ValidationError
+from assinafy.resources.fields import FieldResource
+from tests.conftest import make_envelope, make_response
+
+
+class MockHttp:
+    def __init__(self) -> None:
+        self.last_url = ""
+        self.last_kwargs: dict[str, object] = {}
+
+    def post(self, url: str, **kwargs: object) -> object:
+        self.last_url = url
+        self.last_kwargs = dict(kwargs)
+        return make_response(make_envelope({"id": "field-1"}))
+
+    def get(self, url: str, **kwargs: object) -> object:
+        self.last_url = url
+        self.last_kwargs = dict(kwargs)
+        return make_response(make_envelope([]))
+
+    def put(self, url: str, **kwargs: object) -> object:
+        self.last_url = url
+        self.last_kwargs = dict(kwargs)
+        return make_response(make_envelope({"id": "field-1"}))
+
+    def delete(self, url: str, **kwargs: object) -> object:
+        self.last_url = url
+        self.last_kwargs = dict(kwargs)
+        return make_response(make_envelope([]))
+
+
+class TestFieldResource:
+    def test_create_requires_type_and_name(self) -> None:
+        resource = FieldResource(MockHttp(), "acc")
+
+        with pytest.raises(ValidationError):
+            resource.create({"type": "text"})
+
+    def test_crud_methods_use_documented_field_endpoints(self) -> None:
+        http = MockHttp()
+        resource = FieldResource(http, "acc")
+
+        resource.create({"type": "text", "name": "CPF"})
+        assert http.last_url == "accounts/acc/fields"
+
+        resource.get("field-1")
+        assert http.last_url == "accounts/acc/fields/field-1"
+
+        resource.update("field-1", {"name": "CPF updated"})
+        assert http.last_url == "accounts/acc/fields/field-1"
+
+        resource.delete("field-1")
+        assert http.last_url == "accounts/acc/fields/field-1"
+
+    def test_validate_uses_hyphenated_signer_access_code_param(self) -> None:
+        http = MockHttp()
+        resource = FieldResource(http, "acc")
+
+        resource.validate("field-1", "123", signer_access_code="code")
+
+        assert http.last_url == "accounts/acc/fields/field-1/validate"
+        assert http.last_kwargs["params"] == {"signer-access-code": "code"}
+        assert http.last_kwargs["json"] == {"value": "123"}
+
+    def test_list_types_hits_global_endpoint(self) -> None:
+        http = MockHttp()
+        resource = FieldResource(http, "acc")
+
+        resource.list_types()
+
+        assert http.last_url == "field-types"

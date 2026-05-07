@@ -1,0 +1,233 @@
+from __future__ import annotations
+
+import re
+from typing import Any
+
+from ..errors import ApiError, ValidationError
+from ..utils import QUERY_PARAM_ALIASES, clean_params
+from .base import BaseResource
+
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+_SIGNATURE_TYPES = frozenset({"signature", "initial"})
+
+
+class SignerResource(BaseResource):
+    def create(
+        self, payload: dict[str, Any], account_id: str | None = None
+    ) -> dict[str, Any]:
+        body = _build_signer_payload(payload, require_full_name=True)
+        acc_id = self._account_id(account_id)
+        self._logger.info("Creating signer", {"email": body.get("email")})
+        return self._call(
+            "Failed to create signer",
+            lambda: self._http.post(f"accounts/{acc_id}/signers", json=body),
+        )
+
+    def get(self, signer_id: str, account_id: str | None = None) -> dict[str, Any]:
+        acc_id = self._account_id(account_id)
+        sid = self._require_id(signer_id, "Signer ID")
+        return self._call(
+            "Failed to fetch signer",
+            lambda: self._http.get(f"accounts/{acc_id}/signers/{sid}"),
+        )
+
+    def list(
+        self,
+        params: dict[str, Any] | None = None,
+        account_id: str | None = None,
+    ) -> dict[str, Any]:
+        acc_id = self._account_id(account_id)
+        cleaned = clean_params(params or {}, QUERY_PARAM_ALIASES)
+        return self._call_list(
+            "Failed to list signers",
+            lambda: self._http.get(f"accounts/{acc_id}/signers", params=cleaned),
+        )
+
+    def update(
+        self,
+        signer_id: str,
+        payload: dict[str, Any],
+        account_id: str | None = None,
+    ) -> dict[str, Any]:
+        acc_id = self._account_id(account_id)
+        sid = self._require_id(signer_id, "Signer ID")
+        body = _build_signer_payload(payload, require_full_name=False)
+        if not body:
+            raise ValidationError("At least one signer field is required")
+        return self._call(
+            "Failed to update signer",
+            lambda: self._http.put(
+                f"accounts/{acc_id}/signers/{sid}",
+                json=body,
+            ),
+        )
+
+    def delete(self, signer_id: str, account_id: str | None = None) -> None:
+        acc_id = self._account_id(account_id)
+        sid = self._require_id(signer_id, "Signer ID")
+        return self._call_void(
+            "Failed to delete signer",
+            lambda: self._http.delete(f"accounts/{acc_id}/signers/{sid}"),
+        )
+
+    def find_by_email(
+        self, email: str, account_id: str | None = None
+    ) -> dict[str, Any] | None:
+        _assert_email(email)
+        try:
+            result = self.list({"search": email, "per_page": 100}, account_id)
+        except ApiError as err:
+            if err.status_code == 404:
+                return None
+            raise
+        target = email.lower()
+        for signer in result.get("data", []):
+            if (signer.get("email") or "").lower() == target:
+                return signer
+        return None
+
+    def get_self(self, signer_access_code: str) -> dict[str, Any]:
+        access_code = self._require_id(signer_access_code, "Signer access code")
+        return self._call(
+            "Failed to fetch signer self",
+            lambda: self._http.get(
+                "signers/self",
+                params=clean_params(
+                    {"signer_access_code": access_code},
+                    QUERY_PARAM_ALIASES,
+                ),
+            ),
+        )
+
+    def accept_terms(self, signer_access_code: str) -> dict[str, Any]:
+        access_code = self._require_id(signer_access_code, "Signer access code")
+        return self._call(
+            "Failed to accept signer terms",
+            lambda: self._http.put(
+                "signers/accept-terms",
+                json={"signer-access-code": access_code},
+            ),
+        )
+
+    def verify_email(
+        self,
+        signer_access_code: str,
+        verification_code: str,
+    ) -> dict[str, Any]:
+        access_code = self._require_id(signer_access_code, "Signer access code")
+        code = self._require_id(verification_code, "Verification code")
+        return self._call(
+            "Failed to verify signer email",
+            lambda: self._http.post(
+                "verify",
+                json={
+                    "signer-access-code": access_code,
+                    "verification-code": code,
+                },
+            ),
+        )
+
+    def confirm_data(
+        self,
+        document_id: str,
+        signer_access_code: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        doc_id = self._require_id(document_id, "Document ID")
+        access_code = self._require_id(signer_access_code, "Signer access code")
+        if payload.get("email"):
+            _assert_email(str(payload["email"]))
+        body = clean_params(
+            {
+                "email": payload.get("email"),
+                "whatsapp_phone_number": payload.get("whatsapp_phone_number"),
+                "has_accepted_terms": payload.get("has_accepted_terms"),
+            }
+        )
+        return self._call(
+            "Failed to confirm signer data",
+            lambda: self._http.put(
+                f"documents/{doc_id}/signers/confirm-data",
+                params=clean_params(
+                    {"signer_access_code": access_code},
+                    QUERY_PARAM_ALIASES,
+                ),
+                json=body,
+            ),
+        )
+
+    def upload_signature(
+        self,
+        signer_access_code: str,
+        content: bytes,
+        signature_type: str = "signature",
+        content_type: str = "image/png",
+    ) -> None:
+        access_code = self._require_id(signer_access_code, "Signer access code")
+        _assert_signature_type(signature_type)
+        if not content:
+            raise ValidationError("Signature content is required")
+        self._call_void(
+            "Failed to upload signer signature",
+            lambda: self._http.post(
+                "signature",
+                params=clean_params(
+                    {
+                        "signer_access_code": access_code,
+                        "type": signature_type,
+                    },
+                    QUERY_PARAM_ALIASES,
+                ),
+                content=content,
+                headers={"Content-Type": content_type},
+            ),
+        )
+
+    def download_signature(
+        self,
+        signer_access_code: str,
+        signature_type: str = "signature",
+    ) -> bytes:
+        access_code = self._require_id(signer_access_code, "Signer access code")
+        _assert_signature_type(signature_type)
+        return self._call_binary(
+            "Failed to download signer signature",
+            lambda: self._http.get(
+                f"signature/{signature_type}",
+                params=clean_params(
+                    {"signer_access_code": access_code},
+                    QUERY_PARAM_ALIASES,
+                ),
+            ),
+        )
+
+
+def _build_signer_payload(
+    payload: dict[str, Any], require_full_name: bool
+) -> dict[str, Any]:
+    full_name = payload.get("full_name")
+    if require_full_name and not full_name:
+        raise ValidationError("full_name is required")
+    email = payload.get("email")
+    if email:
+        _assert_email(str(email))
+    return clean_params(
+        {
+            "full_name": full_name,
+            "email": email,
+            "whatsapp_phone_number": payload.get("whatsapp_phone_number"),
+        }
+    )
+
+
+def _assert_email(email: str) -> None:
+    if not email or not _EMAIL_RE.match(email):
+        raise ValidationError("Invalid email address", {"email": email})
+
+
+def _assert_signature_type(signature_type: str) -> None:
+    if signature_type not in _SIGNATURE_TYPES:
+        raise ValidationError(
+            "Signature type must be 'signature' or 'initial'",
+            {"type": signature_type},
+        )
