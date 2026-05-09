@@ -3,7 +3,7 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "assinafy-sdk"
+name = "assinafy"
 version = "1.1.0"
 description = "Python SDK for Assinafy API - Digital signature platform"
 readme = "README.md"

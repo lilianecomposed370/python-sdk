@@ -12,7 +12,7 @@ The SDK is synchronous, uses `httpx`, and covers the documented API groups for a
 ## Installation
 
 ```bash
-pip install assinafy-sdk
+pip install assinafy
 ```
 
 ## Quick Start

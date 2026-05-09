@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `assinafy-sdk` are documented in this file.
+All notable changes to `assinafy` are documented in this file.
 
 ## [1.1.0] - 2026-05-07
 
