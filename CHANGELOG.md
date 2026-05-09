@@ -2,6 +2,12 @@
 
 All notable changes to `assinafy` are documented in this file.
 
+## [1.1.1] - 2026-05-09
+
+### Changed
+
+- Distribution renamed from `assinafy-sdk` to `assinafy` on PyPI. Install with `pip install assinafy`. Import path is unchanged.
+
 ## [1.1.0] - 2026-05-07
 
 ### Changed
